@@ -1,0 +1,13 @@
+【起動方法】
+
+1. PowerShellで node index.js を実行
+2. 別のPowerShellで .\ngrok.exe http 3000 を実行
+3. 出てきたURLに /webhook をつけて LINE Developers に貼る
+4. 登録・動作確認する
+
+token 
+LINElongtoken"HWeFvnnzIm4ZvVxZC3/ev9h+Qt1/ndCPfT1icu2aVsCRQGCHmzGmrLyUPhOWgT6LYzoLM8/vO2glEAhug21tnUsufZZnQ2cK31+EWiW+IsMn82JcKKEuQbppqoZ6nK0kF/9hvm3obYfQO4qtbylyHgdB04t89/1O/w1cDnyilFU="
+
+SPREADSHEET_ID = '1eeKD2M6-TLZ9DbawroocxSSSvGQKAXuPxUktHPUv004'
+
+channelSecret: '4e63465c631f1d2e2472282bf1aa83b8'
