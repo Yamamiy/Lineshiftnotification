@@ -5,7 +5,7 @@ const app = express();
 
 // 🔐 LINE設定
 const config = {
-  channelAccessToken: 'HWeFvnnzIm4ZvVxZC3/ev9h+Qt1/ndCPfT1icu2aVsCRQGCHmzGmrLyUPhOWgT6LYzoLM8/vO2glEAhug21tnUsufZZnQ2cK31+EWiW+IsMn82JcKKEuQbppqoZ6nK0kF/9hvm3obYfQO4qtbylyHgdB04t89/1O/w1cDnyilFU=',
+  channelAccessToken:'HWeFvnnzIm4ZvVxZC3/ev9h+Qt1/ndCPfT1icu2aVsCRQGCHmzGmrLyUPhOWgT6LYzoLM8/vO2glEAhug21tnUsufZZnQ2cK31+EWiW+IsMn82JcKKEuQbppqoZ6nK0kF/9hvm3obYfQO4qtbylyHgdB04t89/1O/w1cDnyilFU=',
   channelSecret: '4e63465c631f1d2e2472282bf1aa83b8'
 };
 const client = new line.Client(config);
@@ -34,7 +34,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         console.log(`新規登録: ${name} (${userId})`);
 
-        // 重複チェック
+        // 重複チェック（B列: ユーザーID）
         const sheetData = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
           range: `${SHEET_NAME}!B2:B`,
@@ -45,18 +45,14 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        // 登録処理
-        const now = new Date();
-        const date = now.toLocaleDateString('ja-JP'); // ex: 2025/04/18
-        const time = now.toLocaleTimeString('ja-JP'); // ex: 14:23:45
-
+        // 登録処理（ユーザーID: B列, ユーザー名: C列）
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A2`,
+          range: `${SHEET_NAME}!B2`,
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
-            values: [[name, userId, date, time]]
+            values: [[userId, name]]  // ←B列にID, C列に名前
           }
         });
 
@@ -66,10 +62,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     }
   }
 
-  res.status(200).send('OK'); // ← 忘れるとエラーになる！
+  res.status(200).send('OK');
 });
 
-// Webサーバー起動（Render対応）
+// Render対応のポート設定
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Webhookサーバー起動中！ ポート: ${PORT}`);
