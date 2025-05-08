@@ -46,23 +46,19 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         }
 
         // 登録処理
-const now = new Date();
-const date = now.toLocaleDateString('ja-JP');     // ex: 2025/04/18
-const time = now.toLocaleTimeString('ja-JP');     // ex: 14:23:45
+        const now = new Date();
+        const date = now.toLocaleDateString('ja-JP'); // ex: 2025/04/18
+        const time = now.toLocaleTimeString('ja-JP'); // ex: 14:23:45
 
-await sheets.spreadsheets.values.append({
-  spreadsheetId: SPREADSHEET_ID,
-  range: `${SHEET_NAME}!A2`,
-  valueInputOption: 'RAW',
-  insertDataOption: 'INSERT_ROWS',
-  requestBody: {
-    values: [[name, userId, date, time]]
-  }
-});
-  }
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A2`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          requestBody: {
+            values: [[name, userId, date, time]]
+          }
         });
-
-              }
 
       } catch (err) {
         console.error('エラー:', err);
@@ -70,8 +66,7 @@ await sheets.spreadsheets.values.append({
     }
   }
 
-  // ← 忘れるとエラーになる！
-  res.status(200).send('OK');
+  res.status(200).send('OK'); // ← 忘れるとエラーになる！
 });
 
 // Webサーバー起動（Render対応）
