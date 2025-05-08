@@ -74,7 +74,8 @@ await sheets.spreadsheets.values.append({
   res.status(200).send('OK');
 });
 
-// 🌐 Webサーバー起動
-app.listen(3000, () => {
-  console.log('Webhookサーバー起動中！ http://localhost:3000');
+// Webサーバー起動（Render対応）
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Webhookサーバー起動中！ ポート: ${PORT}`);
 });
