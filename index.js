@@ -12,9 +12,10 @@ const client = new line.Client(config);
 
 // 🟢 Google Sheets設定
 const auth = new google.auth.GoogleAuth({
-credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  credentials: JSON.parse(process.env.GOOGLE_ACCOUNT_JSON),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
+
 const sheets = google.sheets({ version: 'v4', auth });
 
 const SPREADSHEET_ID = '1eeKD2M6-TLZ9DbawroocxSSSvGQKAXuPxUktHPUv004';
