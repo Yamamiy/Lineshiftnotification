@@ -3,21 +3,25 @@ const line = require('@line/bot-sdk');
 const { google } = require('googleapis');
 const app = express();
 
-// 🔐 LINE設定
+// LINE設定
 const config = {
-  channelAccessToken:'HWeFvnnzIm4ZvVxZC3/ev9h+Qt1/ndCPfT1icu2aVsCRQGCHmzGmrLyUPhOWgT6LYzoLM8/vO2glEAhug21tnUsufZZnQ2cK31+EWiW+IsMn82JcKKEuQbppqoZ6nK0kF/9hvm3obYfQO4qtbylyHgdB04t89/1O/w1cDnyilFU=',
-  channelSecret: '4e63465c631f1d2e2472282bf1aa83b8'
+  channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 const client = new line.Client(config);
 
-// 🟢 Google Sheets設定
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_ACCOUNT_JSON),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+// Google Sheets設定（Base64からJSONに変換）
+const serviceAccount = JSON.parse(
+  Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString('utf8')
+);
 
+const auth = new google.auth.GoogleAuth({
+  credentials: serviceAccount,
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
 const sheets = google.sheets({ version: 'v4', auth });
 
+// 以下に続くコード（Webhook処理、listen）は今までと同じでOK
 const SPREADSHEET_ID = '1eeKD2M6-TLZ9DbawroocxSSSvGQKAXuPxUktHPUv004';
 const SHEET_NAME = 'マスターデータ';
 
