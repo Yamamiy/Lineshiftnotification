@@ -53,11 +53,11 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         // 登録処理（ユーザーID: B列, ユーザー名: C列）
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!B2`,
+          range: `${SHEET_NAME}!A2`,
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
-            values: [[userId, name]]  // ←B列にID, C列に名前
+            values: [[ '', userId, name ]]  // ← A列空欄 → B列ID → C列名前
           }
         });
 
