@@ -110,14 +110,18 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       if (text.trim() === 'シフト検索') {
         try {
+          const profile = await client.getProfile(userId);
+          const name = profile.displayName;
+      
           const shifts = await getUserShiftData(userId);
-          const replyText = shifts.length > 0
+          const header = `【${name}さんのこれからのシフト】`;
+          const body = shifts.length > 0
             ? shifts.join('\n')
             : '現在以降のシフトが登録されていません。';
-
+      
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: replyText
+            text: `${header}\n${body}`
           });
         } catch (err) {
           console.error('シフト検索中のエラー:', err);
