@@ -3,25 +3,20 @@ const line = require('@line/bot-sdk');
 const { google } = require('googleapis');
 const app = express();
 
-// LINE設定
+// 🔐 LINE設定
 const config = {
-  channelAccessToken: process.env.LINE_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
+  channelAccessToken: 'HWeFvnnzIm4ZvVxZC3/ev9h+Qt1/ndCPfT1icu2aVsCRQGCHmzGmrLyUPhOWgT6LYzoLM8/vO2glEAhug21tnUsufZZnQ2cK31+EWiW+IsMn82JcKKEuQbppqoZ6nK0kF/9hvm3obYfQO4qtbylyHgdB04t89/1O/w1cDnyilFU=',
+  channelSecret: '4e63465c631f1d2e2472282bf1aa83b8'
 };
 const client = new line.Client(config);
 
-// Google Sheets設定（Base64からJSONに変換）
-const serviceAccount = JSON.parse(
-  Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString('utf8')
-);
-
+// 🟢 Google Sheets設定
 const auth = new google.auth.GoogleAuth({
-  credentials: serviceAccount,
+  keyFile: 'service-account.json',
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-// 以下に続くコード（Webhook処理、listen）は今までと同じでOK
 const SPREADSHEET_ID = '1eeKD2M6-TLZ9DbawroocxSSSvGQKAXuPxUktHPUv004';
 const SHEET_NAME = 'マスターデータ';
 
@@ -39,10 +34,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         console.log(`新規登録: ${name} (${userId})`);
 
-        // 重複チェック（B列: ユーザーID）
+        // 重複チェック（ユーザーIDの列）
         const sheetData = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!B2:B`,
+          range: `${SHEET_NAME}!C2:C`, // C列 = ユーザーID
         });
         const existingIds = (sheetData.data.values || []).flat();
         if (existingIds.includes(userId)) {
@@ -50,14 +45,17 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           continue;
         }
 
-        // 登録処理（ユーザーID: B列, ユーザー名: C列）
+        // タイムスタンプを含めて記録（A列に日時, B列にユーザー名, C列にユーザーID）
+        const now = new Date();
+        const datetime = now.toLocaleString('ja-JP'); // 例: 2025/05/10 19:32:00
+
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
           range: `${SHEET_NAME}!A2`,
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
-            values: [[ '', userId, name ]]  // ← A列空欄 → B列ID → C列名前
+            values: [[datetime, name, userId]]
           }
         });
 
@@ -70,7 +68,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   res.status(200).send('OK');
 });
 
-// Render対応のポート設定
+// 🌐 Webサーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Webhookサーバー起動中！ ポート: ${PORT}`);
