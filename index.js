@@ -12,12 +12,16 @@ const config = {
 };
 const client = new line.Client(config);
 
-// Google Sheets API用のJWT認証（"シフト検索"用）
+// Google Sheets API用のJWT認証（"シフト検索"用 - Base64対応）
 async function getUserShiftData(userId) {
+  const credentials = JSON.parse(
+    Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString()
+  );
+
   const auth = new google.auth.JWT(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    credentials.client_email,
     null,
-    process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    credentials.private_key,
     ['https://www.googleapis.com/auth/spreadsheets.readonly']
   );
   const sheets = google.sheets({ version: 'v4', auth });
@@ -104,7 +108,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const text = event.message.text;
       const userId = event.source.userId;
 
-      if (text === 'シフト検索') {
+      if (text.trim() === 'シフト検索') {
         try {
           const shifts = await getUserShiftData(userId);
           const replyText = shifts.length > 0
