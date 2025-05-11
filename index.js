@@ -7,40 +7,40 @@ const app = express();
 
 // LINE Bot設定
 const config = {
-channelAccessToken: process.env.LINE\_ACCESS\_TOKEN,
-channelSecret: process.env.LINE\_CHANNEL\_SECRET,
+channelAccessToken: process.env.LINE_ACCESS_TOKEN,
+channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 const client = new line.Client(config);
 
 // Google Sheets API用のJWT認証（"シフト検索"用 - Base64対応）
 async function getUserShiftData(userId) {
 const credentials = JSON.parse(
-Buffer.from(process.env.GOOGLE\_ACCOUNT\_BASE64, 'base64').toString()
+Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString()
 );
 
 const auth = new google.auth.JWT(
-credentials.client\_email,
+credentials.client_email,
 null,
-credentials.private\_key,
-\['[https://www.googleapis.com/auth/spreadsheets.readonly](https://www.googleapis.com/auth/spreadsheets.readonly)']
+credentials.private_key,
+['[https://www.googleapis.com/auth/spreadsheets.readonly](https://www.googleapis.com/auth/spreadsheets.readonly)']
 );
 const sheets = google.sheets({ version: 'v4', auth });
 
-const sheetId = process.env.SPREADSHEET\_ID;
-const range = 'テストシフト\_企画\_読み取り用\_一日目!A3\:F';
+const sheetId = process.env.SPREADSHEET_ID;
+const range = 'テストシフト_企画_読み取り用_一日目!A3\:F';
 
 const res = await sheets.spreadsheets.values.get({
 spreadsheetId: sheetId,
 range: range,
 });
-const values = res.data.values || \[];
+const values = res.data.values || [];
 
 const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
-const nowStr = now\.toTimeString().slice(0, 5); // "HH\:mm"
+const nowStr = now.toTimeString().slice(0, 5); // "HH:mm"
 
 const matched = values.filter(row => {
-const rowUserId = row\[2];
-const timeStr = row\[3];
+const rowUserId = row[2];
+const timeStr = row[3];
 return (
 rowUserId === userId &&
 typeof timeStr === 'string' &&
@@ -48,27 +48,27 @@ timeStr >= nowStr
 );
 });
 
-if (matched.length === 0) return \[];
+if (matched.length === 0) return [];
 
 return matched.map(row => {
-const time = row\[3] || '時間不明';
-const place = row\[5] || '場所不明';
-const club = row\[4] || '';
+const time = row[3] || '時間不明';
+const place = row[5] || '場所不明';
+const club = row[4] || '';
 return `・${time} @ ${place}（${club}）`;
 });
 }
 
 // Google Sheets API（マスターデータ記録用）
 const sheetsAuth = new google.auth.GoogleAuth({
-credentials: JSON.parse(Buffer.from(process.env.GOOGLE\_ACCOUNT\_BASE64, 'base64').toString()),
-scopes: \['[https://www.googleapis.com/auth/spreadsheets](https://www.googleapis.com/auth/spreadsheets)']
+credentials: JSON.parse(Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString()),
+scopes: ['[https://www.googleapis.com/auth/spreadsheets](https://www.googleapis.com/auth/spreadsheets)']
 });
 const sheets = google.sheets({ version: 'v4', auth: sheetsAuth });
-const SPREADSHEET\_ID = process.env.SPREADSHEET\_ID;
-const SHEET\_NAME = 'マスターデータ';
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SHEET_NAME = 'マスターデータ';
 
 // Webhookエンドポイント
-app.post('/webhook', line.middleware(config), async (req, res) => {
+app.post('webhook', line.middleware(config), async (req, res) => {
 const events = req.body.events;
 
 for (const event of events) {
