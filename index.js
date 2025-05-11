@@ -98,7 +98,7 @@ const name = profile.displayName;
      // 登録処理
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A2`,
+      range: `${SHEET_NAME}!A2`,  // ←ここ！
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
