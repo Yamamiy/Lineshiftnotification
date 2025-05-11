@@ -82,7 +82,7 @@ const name = profile.displayName;
 ```
     const sheetData = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!C2:C`,
+      range: `{SHEET_NAME}!C2:C`,
     });
     const existingIds = (sheetData.data.values || []).flat();
     if (existingIds.includes(userId)) continue;
@@ -92,7 +92,7 @@ const name = profile.displayName;
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A2`,
+      range: `{SHEET_NAME}!A2`,
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
