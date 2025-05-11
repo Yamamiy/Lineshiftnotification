@@ -88,8 +88,8 @@ const name = profile.displayName;
     if (existingIds.includes(userId)) continue;
 
     const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
-    const datetime = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-
+    const datetime = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A2`,
@@ -99,6 +99,7 @@ const name = profile.displayName;
         values: [[datetime, name, userId]]
       }
     });
+
   } catch (err) {
     console.error('登録時エラー:', err);
   }
