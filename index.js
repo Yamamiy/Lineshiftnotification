@@ -80,19 +80,25 @@ const profile = await client.getProfile(userId);
 const name = profile.displayName;
 
 ```
+    // 登録時の重複チェック
     const sheetData = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `{SHEET_NAME}!C2:C`,
+      range: `${SHEET_NAME}!C2:C`,
     });
+
     const existingIds = (sheetData.data.values || []).flat();
     if (existingIds.includes(userId)) continue;
 
     const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
     const datetime = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
     
+    // 登録処理
+   
+
+     // 登録処理
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `{SHEET_NAME}!A2`,
+      range: `${SHEET_NAME}!A2`,
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
@@ -100,6 +106,7 @@ const name = profile.displayName;
       }
     });
 
+        
   } catch (err) {
     console.error('登録時エラー:', err);
   }
