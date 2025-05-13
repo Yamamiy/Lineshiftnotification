@@ -86,7 +86,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
-            values: [[datetime, name, userId]]
+            values: [[datetime, '', userId, name]] // ← C列にID, D列に名前
           }
         });
 
