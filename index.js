@@ -42,6 +42,7 @@ async function getUserShiftData(userId) {
 
   return values
     .filter(row => row[2] === userId && typeof row[3] === 'string' && row[3] >= nowStr)
+    .slice(0, 4)
     .map(row => ({
       time: row[3] || '??:??',
       point: row[5] || '場所不明',
@@ -202,7 +203,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           }
 
           const flex = createTimelineFlex(name, shifts);
-          console.log('送信Flex構造:', JSON.stringify(flex, null, 2)); // ログ出力
+          console.log('送信Flex構造:', JSON.stringify(flex, null, 2));
 
           await client.replyMessage(event.replyToken, {
             replyToken: event.replyToken,
