@@ -42,7 +42,7 @@ async function getUserShiftData(userId) {
 
   return values
     .filter(row => row[2] === userId && typeof row[3] === 'string' && row[3] >= nowStr)
-    .slice(0, 4)
+    .slice(0, 2)
     .map(row => ({
       time: row[3] || '??:??',
       point: row[5] || '場所不明',
