@@ -202,7 +202,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           }
 
           const flex = createTimelineFlex(name, shifts);
-          await client.replyMessage(event.replyToken, flex);
+          console.log('送信Flex構造:', JSON.stringify(flex, null, 2)); // ログ出力
+
+          await client.replyMessage(event.replyToken, {
+            replyToken: event.replyToken,
+            messages: [flex]
+          });
         } catch (err) {
           console.error('シフト検索中のFlex送信エラー:', err);
         }
