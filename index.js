@@ -40,33 +40,122 @@ async function getUserShiftData(userId) {
   const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
   const nowStr = now.toTimeString().slice(0, 5);
 
-  const matched = values.filter(row => {
-    const rowUserId = row[2];
-    const timeStr = row[3];
-    return (
-      rowUserId === userId &&
-      typeof timeStr === 'string' &&
-      timeStr >= nowStr
+  return values
+    .filter(row => row[2] === userId && typeof row[3] === 'string' && row[3] >= nowStr)
+    .map(row => ({
+      time: row[3] || '??:??',
+      place: row[5] || '場所不明',
+      club: row[4] || '担当不明'
+    }));
+}
+
+function createTimelineFlex(name, shifts) {
+  const blocks = [];
+
+  shifts.forEach((shift, index) => {
+    const color = index === 0 ? "#EF454D" : "#6486E3";
+
+    blocks.push(
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "lg",
+        cornerRadius: "30px",
+        margin: index === 0 ? "xl" : "none",
+        contents: [
+          { type: "text", text: shift.time, size: "sm", gravity: "center" },
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 0,
+            contents: [
+              { type: "filler" },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [],
+                width: "12px",
+                height: "12px",
+                borderWidth: "2px",
+                borderColor: color,
+                cornerRadius: "30px"
+              },
+              { type: "filler" }
+            ]
+          },
+          { type: "text", text: shift.club, gravity: "center", flex: 4, size: "sm" }
+        ]
+      },
+      {
+        type: "box",
+        layout: "horizontal",
+        height: "64px",
+        spacing: "lg",
+        contents: [
+          { type: "box", layout: "baseline", flex: 1, contents: [{ type: "filler" }] },
+          {
+            type: "box",
+            layout: "vertical",
+            width: "12px",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                flex: 1,
+                contents: [
+                  { type: "filler" },
+                  { type: "box", layout: "vertical", width: "2px", backgroundColor: color, contents: [] },
+                  { type: "filler" }
+                ]
+              }
+            ]
+          },
+          { type: "text", text: shift.place, gravity: "center", flex: 4, size: "xs", color: "#8c8c8c" }
+        ]
+      }
     );
   });
 
-  if (matched.length === 0) return [];
-
-  return matched.map(row => {
-    const time = row[3] || '時間不明';
-    const place = row[5] || '場所不明';
-    const club = row[4] || '';
-    return `・${time} @ ${place}（${club}）`;
-  });
+  return {
+    type: "flex",
+    altText: `${name}さんのこれからのシフト`,
+    contents: {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: `${name}さんのこれからのシフト`,
+            size: "md",
+            color: "#FFFFFF",
+            weight: "bold",
+            align: "center"
+          }
+        ],
+        paddingAll: "20px",
+        backgroundColor: "#0367D3",
+        height: "20px",
+        paddingTop: "22px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: blocks
+      }
+    }
+  };
 }
 
-// Webhookエンドポイント
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
 
   for (const event of events) {
+    const userId = event.source.userId;
+
     if (event.type === 'follow') {
-      const userId = event.source.userId;
       try {
         const profile = await client.getProfile(userId);
         const name = profile.displayName;
@@ -86,7 +175,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
           requestBody: {
-            values: [[datetime, '', userId, name]] // ← C列にID, D列に名前
+            values: [[datetime, '', userId, name]]
           }
         });
 
@@ -97,7 +186,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
     if (event.type === 'message' && event.message.type === 'text') {
       const text = event.message.text;
-      const userId = event.source.userId;
 
       if (text.trim() === 'シフト検索') {
         try {
@@ -105,26 +193,25 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           const name = profile.displayName;
 
           const shifts = await getUserShiftData(userId);
-          const header = `【${name}さんのこれからのシフト】`;
-          const body = shifts.length > 0
-            ? shifts.join('\n')
-            : '現在以降のシフトが登録されていません。';
+          if (shifts.length === 0) {
+            await client.replyMessage(event.replyToken, {
+              type: 'text',
+              text: `${name}さんのこれからのシフトは登録されていません。`
+            });
+            return;
+          }
 
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: `${header}\n${body}`
-          });
+          const flex = createTimelineFlex(name, shifts);
+          await client.replyMessage(event.replyToken, flex);
         } catch (err) {
-          console.error('シフト検索中のエラー:', err);
+          console.error('シフト検索中のFlex送信エラー:', err);
         }
       }
     }
   }
-
   res.status(200).send('OK');
 });
 
-// サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Webhookサーバー起動中！ポート: ${PORT}`);
