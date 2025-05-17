@@ -202,20 +202,26 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
             return;
           }
 
-         const flex = createTimelineFlex(name, shifts);
-console.log('送信Flex構造:', JSON.stringify(flex, null, 2));
+          const flex = createTimelineFlex(name, shifts);
+          console.log('送信Flex構造:', JSON.stringify(flex, null, 2));
 
-await client.replyMessage(event.replyToken, {
-  replyToken: event.replyToken,
-  messages: [
-    {
-      type: "flex",
-      altText: flex.altText,
-      contents: flex.contents,
+          await client.replyMessage(event.replyToken, {
+            messages: [
+              {
+                type: "flex",
+                altText: flex.altText,
+                contents: flex.contents,
+              }
+            ]
+          });
+        } catch (err) {
+          console.error('シフト検索中のFlex送信エラー:', err);
+        }
+      }
     }
-  ]
+  }
+  res.status(200).send('OK');
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
