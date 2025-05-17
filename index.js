@@ -44,7 +44,7 @@ async function getUserShiftData(userId) {
     .filter(row => row[2] === userId && typeof row[3] === 'string' && row[3] >= nowStr)
     .map(row => ({
       time: row[3] || '??:??',
-      place: row[5] || '場所不明',
+      point: row[5] || '場所不明',
       club: row[4] || '担当不明'
     }));
 }
@@ -110,7 +110,7 @@ function createTimelineFlex(name, shifts) {
               }
             ]
           },
-          { type: "text", text: shift.place, gravity: "center", flex: 4, size: "xs", color: "#8c8c8c" }
+          { type: "text", text: shift.point, gravity: "center", flex: 4, size: "xs", color: "#8c8c8c" }
         ]
       }
     );
