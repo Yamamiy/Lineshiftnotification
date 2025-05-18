@@ -36,30 +36,34 @@ async function getUserShiftData(userId, sheetName) {
   const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
   const nowStr = now.toTimeString().slice(0, 5);
 
-  return values
+  const filtered = values
     .filter(row => row[1] === userId && typeof row[2] === 'string' && row[2] >= nowStr)
     .sort((a, b) => a[2].localeCompare(b[2]))
-    .slice(0, 3)
-    .map(row => ({
-      sTime: row[2] || '',
-      eTime: row[3] || '',
-      club: row[4] || '',
-      point: row[5] || ''
-    }));
+    .slice(0, 3);
+
+  const nameFromSheet = filtered.length > 0 ? filtered[0][0] : 'UNKNOWN';
+
+  const data = filtered.map(row => ({
+    's-time': row[2] || '??:??',
+    'e-time': row[3] || '??:??',
+    'club': row[4] || '??',
+    'point': row[5] || '??'
+  }));
+
+  return { nameFromSheet, data };
 }
 
 function fillTemplate(templateLines, name, shifts) {
   const joined = templateLines.join('\n');
-  let filled = joined.replace(/{name}/g, name);
-  
+  let filled = joined.replace('{name}', name);
   for (let i = 0; i < 3; i++) {
-    const data = shifts[i] || { sTime: '', eTime: '', club: '', point: '' };
-    filled = filled.replace(new RegExp(`{s-time${i + 1}}`, 'g'), data.sTime)
-                   .replace(new RegExp(`{e-time${i + 1}}`, 'g'), data.eTime)
-                   .replace(new RegExp(`{club${i + 1}}`, 'g'), data.club)
-                   .replace(new RegExp(`{point${i + 1}}`, 'g'), data.point);
+    const d = shifts[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
+    filled = filled
+      .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), d['s-time'])
+      .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), d['e-time'])
+      .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), d['club'])
+      .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), d['point']);
   }
-
   return filled;
 }
 
@@ -106,14 +110,12 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       else continue;
 
       try {
-        const profile = await client.getProfile(userId);
-        const name = profile.displayName;
-        const shiftData = await getUserShiftData(userId, sheetName);
+        const { nameFromSheet, data: shiftData } = await getUserShiftData(userId, sheetName);
 
         if (shiftData.length === 0) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: `${name}さんのこれからのシフトは登録されていません。`
+            text: `${nameFromSheet}さんのこれからのシフトは登録されていません。`
           });
           return;
         }
@@ -124,10 +126,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         });
         const templateLines = templateRes.data.values?.map(row => row[0]) || [];
 
-        const filledJson = fillTemplate(templateLines, name, shiftData);
+        const filledJson = fillTemplate(templateLines, nameFromSheet, shiftData);
         await client.replyMessage(event.replyToken, {
           type: 'flex',
-          altText: `${name}さんのこれからのシフト`,
+          altText: `${nameFromSheet}さんのこれからのシフト`,
           contents: JSON.parse(filledJson)
         });
       } catch (err) {
