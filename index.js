@@ -43,8 +43,8 @@ async function getUserShiftData(userId, sheetName) {
     .map(row => ({
       's-time': row[3] || '??:??',
       'e-time': row[4] || '??:??',
-      'club': row[1] || '不明',
-      'point': row[5] || '不明'
+      'club': row[5] || '不明',
+      'point': row[6] || '不明'
     }));
 }
 
