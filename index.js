@@ -37,24 +37,24 @@ async function getUserShiftData(userId, sheetName) {
   const nowStr = now.toTimeString().slice(0, 5);
 
   return values
-    .filter(row => row[2] === userId && typeof row[3] === 'string' && row[3] >= nowStr)
-    .sort((a, b) => a[3].localeCompare(b[3]))
+    .filter(row => row[1] === userId && typeof row[2] === 'string' && row[2] >= nowStr)
+    .sort((a, b) => a[2].localeCompare(b[2]))
     .slice(0, 3)
     .map(row => ({
-  's-time': row[4] || '??:??',
-  'e-time': row[5] || '??:??',
-  'club': row[6] || '??',
-  'point': row[7] || '??'
-}));
+      's-time': row[2] || '??:??',
+      'e-time': row[3] || '??:??',
+      'club': row[4] || '??',
+      'point': row[5] || '??'
+    }));
+}
 
-
-function fillTemplate(template, values) {
-  let result = template;
-  for (const key in values) {
-    const re = new RegExp(`\\{${key}\\}`, 'g');
-    result = result.replace(re, values[key]);
+function fillTemplate(template, replacements) {
+  let filled = template;
+  for (const [key, value] of Object.entries(replacements)) {
+    const regex = new RegExp(`\\{${key}\\}`, 'g');
+    filled = filled.replace(regex, value);
   }
-  return result;
+  return filled;
 }
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -116,23 +116,22 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           spreadsheetId: SPREADSHEET_ID,
           range: '本文!E3'
         });
-        let baseTemplate = templateRes.data.values?.[0]?.[0];
+        const baseTemplate = templateRes.data.values?.[0]?.[0];
+
         if (!baseTemplate) throw new Error('テンプレートが見つかりません');
 
-        baseTemplate = baseTemplate.replace(/{name}/g, name);
-
+        let filled = baseTemplate.replace('{name}', name);
         for (let i = 0; i < 3; i++) {
           const data = shiftData[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
-          for (const key in data) {
-            const re = new RegExp(`\\{${key}${i + 1}\\}`, 'g');
-            baseTemplate = baseTemplate.replace(re, data[key]);
+          for (const [key, val] of Object.entries(data)) {
+            filled = filled.replace(new RegExp(`\\{${key}${i + 1}\\}`, 'g'), val);
           }
         }
 
         await client.replyMessage(event.replyToken, {
           type: 'flex',
           altText: `${name}さんのこれからのシフト`,
-          contents: JSON.parse(baseTemplate)
+          contents: JSON.parse(filled)
         });
       } catch (err) {
         console.error('シフト検索中のエラー:', err);
