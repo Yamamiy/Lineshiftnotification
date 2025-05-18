@@ -43,8 +43,8 @@ async function getUserShiftData(userId, sheetName) {
     .map(row => ({
       's-time': row[3] || '??:??',
       'e-time': row[4] || '??:??',
-      'club': row[5] || '不明',
-      'point': row[6] || '不明'
+      'club': row[0] || '??',
+      'point': row[5] || '??'
     }));
 }
 
@@ -116,22 +116,23 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           spreadsheetId: SPREADSHEET_ID,
           range: '本文!E3'
         });
-        const baseTemplate = templateRes.data.values?.[0]?.[0];
-
+        let baseTemplate = templateRes.data.values?.[0]?.[0];
         if (!baseTemplate) throw new Error('テンプレートが見つかりません');
 
-        let filled = baseTemplate.replace('{name}', name);
+        baseTemplate = baseTemplate.replace(/{name}/g, name);
+
         for (let i = 0; i < 3; i++) {
           const data = shiftData[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
-          filled = fillTemplate(filled, Object.fromEntries(
-            Object.entries(data).map(([k, v]) => [`${k}${i + 1}`, v])
-          ));
+          for (const key in data) {
+            const re = new RegExp(`\\{${key}${i + 1}\\}`, 'g');
+            baseTemplate = baseTemplate.replace(re, data[key]);
+          }
         }
 
         await client.replyMessage(event.replyToken, {
           type: 'flex',
           altText: `${name}さんのこれからのシフト`,
-          contents: JSON.parse(filled)
+          contents: JSON.parse(baseTemplate)
         });
       } catch (err) {
         console.error('シフト検索中のエラー:', err);
