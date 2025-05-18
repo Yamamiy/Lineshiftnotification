@@ -29,7 +29,7 @@ async function getUserShiftData(userId, sheetName) {
 
   const res = await sheetsReadonly.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A3:F`
+    range: `${sheetName}!B3:G`
   });
 
   const values = res.data.values || [];
@@ -41,18 +41,21 @@ async function getUserShiftData(userId, sheetName) {
     .sort((a, b) => a[2].localeCompare(b[2]))
     .slice(0, 3)
     .map(row => ({
-      's-time': row[4] || '??:??',
-      'e-time': row[5] || '??:??',
-      'club': row[6] || '??',
-      'point': row[7] || '??'
+      's-time': row[2] || '??:??',
+      'e-time': row[3] || '??:??',
+      'club': row[4] || '??',
+      'point': row[5] || '??'
     }));
 }
 
-function fillTemplate(template, replacements) {
-  let filled = template;
-  for (const [key, value] of Object.entries(replacements)) {
-    const regex = new RegExp(`\\{${key}\\}`, 'g');
-    filled = filled.replace(regex, value);
+function fillTemplate(templateLines, name, shifts) {
+  const joined = templateLines.join('\n');
+  let filled = joined.replace('{name}', name);
+  for (let i = 0; i < 3; i++) {
+    const data = shifts[i] || { 's-time': '??:??', 'e-time': '??:??', 'club': '??', 'point': '??' };
+    for (const [key, val] of Object.entries(data)) {
+      filled = filled.replace(new RegExp(`\\{${key}${i + 1}\\}`, 'g'), val);
+    }
   }
   return filled;
 }
@@ -114,24 +117,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         const templateRes = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: '本文!E3'
+          range: '本文!E3:E563'
         });
-        const baseTemplate = templateRes.data.values?.[0]?.[0];
+        const templateLines = templateRes.data.values?.map(row => row[0]) || [];
 
-        if (!baseTemplate) throw new Error('テンプレートが見つかりません');
-
-        let filled = baseTemplate.replace('{name}', name);
-        for (let i = 0; i < 3; i++) {
-          const data = shiftData[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
-          for (const [key, val] of Object.entries(data)) {
-            filled = filled.replace(new RegExp(`\\{${key}${i + 1}\\}`, 'g'), val);
-          }
-        }
-
+        const filledJson = fillTemplate(templateLines, name, shiftData);
         await client.replyMessage(event.replyToken, {
           type: 'flex',
           altText: `${name}さんのこれからのシフト`,
-          contents: JSON.parse(filled)
+          contents: JSON.parse(filledJson)
         });
       } catch (err) {
         console.error('シフト検索中のエラー:', err);
