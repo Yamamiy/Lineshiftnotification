@@ -41,22 +41,25 @@ async function getUserShiftData(userId, sheetName) {
     .sort((a, b) => a[2].localeCompare(b[2]))
     .slice(0, 3)
     .map(row => ({
-      's-time': row[2] || '??:??',
-      'e-time': row[3] || '??:??',
-      'club': row[4] || '??',
-      'point': row[5] || '??'
+      sTime: row[2] || '',
+      eTime: row[3] || '',
+      club: row[4] || '',
+      point: row[5] || ''
     }));
 }
 
 function fillTemplate(templateLines, name, shifts) {
   const joined = templateLines.join('\n');
-  let filled = joined.replace('{name}', name);
+  let filled = joined.replace(/{name}/g, name);
+  
   for (let i = 0; i < 3; i++) {
-    const data = shifts[i] || { 's-time': '??:??', 'e-time': '??:??', 'club': '??', 'point': '??' };
-    for (const [key, val] of Object.entries(data)) {
-      filled = filled.replace(new RegExp(`\\{${key}${i + 1}\\}`, 'g'), val);
-    }
+    const data = shifts[i] || { sTime: '', eTime: '', club: '', point: '' };
+    filled = filled.replace(new RegExp(`{s-time${i + 1}}`, 'g'), data.sTime)
+                   .replace(new RegExp(`{e-time${i + 1}}`, 'g'), data.eTime)
+                   .replace(new RegExp(`{club${i + 1}}`, 'g'), data.club)
+                   .replace(new RegExp(`{point${i + 1}}`, 'g'), data.point);
   }
+
   return filled;
 }
 
@@ -117,7 +120,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         const templateRes = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: '本文!E3'
+          range: '本文!E3:E563'
         });
         const templateLines = templateRes.data.values?.map(row => row[0]) || [];
 
