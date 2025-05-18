@@ -41,10 +41,10 @@ async function getUserShiftData(userId, sheetName) {
     .sort((a, b) => a[2].localeCompare(b[2]))
     .slice(0, 3)
     .map(row => ({
-      's-time': row[2] || '??:??',
-      'e-time': row[3] || '??:??',
-      'club': row[4] || '??',
-      'point': row[5] || '??'
+      's-time': row[4] || '??:??',
+      'e-time': row[5] || '??:??',
+      'club': row[6] || '??',
+      'point': row[7] || '??'
     }));
 }
 
