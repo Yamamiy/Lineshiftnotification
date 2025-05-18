@@ -41,12 +41,12 @@ async function getUserShiftData(userId, sheetName) {
     .sort((a, b) => a[3].localeCompare(b[3]))
     .slice(0, 3)
     .map(row => ({
-      's-time': row[3] || '??:??',
-      'e-time': row[4] || '??:??',
-      'club': row[0] || '??',
-      'point': row[5] || '??'
-    }));
-}
+  's-time': row[4] || '??:??',
+  'e-time': row[5] || '??:??',
+  'club': row[6] || '??',
+  'point': row[7] || '??'
+}));
+
 
 function fillTemplate(template, values) {
   let result = template;
