@@ -105,7 +105,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const text = event.message.text.trim();
       let sheetName = '';
 
-      if (text === '企画部:シフト検索') sheetName = 'テストシフト_企画_読み取り用_一日';
+      if (text === '企画部:シフト検索') sheetName = '幹部テスト2025/05/27';
       else if (text === '総務部:シフト検索') sheetName = '幹部テスト2025/05/26';
       else continue;
 
