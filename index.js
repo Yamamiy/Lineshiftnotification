@@ -64,6 +64,9 @@ function fillTemplate(templateLines, name, shifts) {
       .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), d['club'])
       .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), d['point']);
   }
+
+  // 空テキストを全角スペースに置換
+  filled = filled.replace(/"text":\s*""/g, '"text":"　"');
   return filled;
 }
 
@@ -109,6 +112,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       else if (text === '総務部:シフト検索') sheetName = '幹部テスト2025/05/26';
       else continue;
 
+      let altText = '';
+      let filledJson = '';
+
       try {
         const { nameFromSheet, data: shiftData } = await getUserShiftData(userId, sheetName);
 
@@ -124,10 +130,10 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
           sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' })
         ]);
-        console.log(altTextRes, flexRes)
-        const altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
+
+        altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
         const templateString = flexRes.data.values?.[0]?.[0] || '';
-        const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
+        filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
 
         await client.replyMessage(event.replyToken, {
           type: 'flex',
@@ -136,14 +142,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         });
       } catch (err) {
         console.error('シフト検索中のエラー:', err);
+        console.log("🧾 altText:", altText);
+        console.log("🧾 filledJson（送信前）:", filledJson);
       }
     }
   }
 
   res.status(200).send('OK');
-  console.log("🧾 altText:", altText);
-  console.log("🧾 filledJson（送信前）:", filledJson);
-
 });
 
 const PORT = process.env.PORT || 3000;
