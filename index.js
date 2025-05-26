@@ -120,16 +120,25 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           return;
         }
 
-        const templateRes = await sheets.spreadsheets.values.get({
-          spreadsheetId: SPREADSHEET_ID,
-          range: '本文!E3'
-        });
-        const templateLines = templateRes.data.values?.map(row => row[0]) || [];
+        const [altTextRes, flexRes] = await Promise.all([
+          sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: '本文!E2'
+          }),
+          sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: '本文!E3'
+          })
+        ]);
+
+        const altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
+        const templateLines = flexRes.data.values?.map(row => row[0]) || [];
 
         const filledJson = fillTemplate(templateLines, nameFromSheet, shiftData);
+
         await client.replyMessage(event.replyToken, {
           type: 'flex',
-          altText: `${nameFromSheet}さんのこれからのシフト`,
+          altText: altText,
           contents: JSON.parse(filledJson)
         });
       } catch (err) {
