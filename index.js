@@ -124,7 +124,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
           sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' })
         ]);
-
+        console.log(altTextRes, flexRes)
         const altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
         const templateString = flexRes.data.values?.[0]?.[0] || '';
         const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
