@@ -121,27 +121,20 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         }
 
         const [altTextRes, flexRes] = await Promise.all([
-          sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: '本文!E2'
-          }),
-          sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: '本文!E3'
-          })
+          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
+          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' })
         ]);
-
+        
         const altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
-        const templateLines = flexRes.data.values?.map(row => row[0]) || [];
-
-        const filledJson = fillTemplate(templateLines, nameFromSheet, shiftData);
-
+        const templateString = flexRes.data.values?.[0]?.[0] || '';
+        const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
+        
         await client.replyMessage(event.replyToken, {
           type: 'flex',
           altText: altText,
           contents: JSON.parse(filledJson)
         });
-      } catch (err) {
+catch (err) {
         console.error('シフト検索中のエラー:', err);
       }
     }
