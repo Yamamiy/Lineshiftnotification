@@ -58,7 +58,6 @@ function fillTemplate(templateLines, name, shifts) {
   let filled = joined.replace(/\{name\}/g, name);
 
   if (shifts.length === 0) {
-    // 空のFlexに置き換えるならここを調整
     filled = filled.replace(/\{point\d+\}/g, 'これからのシフトはありません');
     filled = filled.replace(/\{s-time\d+\}/g, '');
     filled = filled.replace(/\{e-time\d+\}/g, '');
@@ -67,10 +66,10 @@ function fillTemplate(templateLines, name, shifts) {
     for (let i = 0; i < 3; i++) {
       const d = shifts[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
       filled = filled
-        .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), d['s-time'])
-        .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), d['e-time'])
-        .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), d['club'])
-        .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), d['point']);
+        .replace(new RegExp(`\{s-time${i + 1}\}`, 'g'), d['s-time'])
+        .replace(new RegExp(`\{e-time${i + 1}\}`, 'g'), d['e-time'])
+        .replace(new RegExp(`\{club${i + 1}\}`, 'g'), d['club'])
+        .replace(new RegExp(`\{point${i + 1}\}`, 'g'), d['point']);
     }
   }
 
@@ -122,23 +121,25 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       try {
         const { nameFromSheet, data: shiftData } = await getUserShiftData(userId, sheetName);
 
+        const [altTextRes, flexRes, noShiftRes] = await Promise.all([
+          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
+          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' }),
+          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E4' })
+        ]);
+
+        let altTextRaw = altTextRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフト';
+        altTextRaw = altTextRaw.replace(/\{name\}/g, nameFromSheet);
+
         if (shiftData.length === 0) {
+          const noShiftMsg = (noShiftRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフトは登録されていません。').replace(/\{name\}/g, nameFromSheet);
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: `${nameFromSheet}さんのこれからのシフトは登録されていません。`
+            text: noShiftMsg
           });
           return;
         }
 
-        const [altTextRes, flexRes] = await Promise.all([
-          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
-          sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' })
-        ]);
-
-        let altTextRaw = altTextRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフト';
         const templateString = flexRes.data.values?.[0]?.[0] || '';
-
-        altTextRaw = altTextRaw.replace(/\{name\}/g, nameFromSheet);
         const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
 
         await client.replyMessage(event.replyToken, {
