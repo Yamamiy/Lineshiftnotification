@@ -2,6 +2,8 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const { google } = require('googleapis');
 const app = express();
+app.use(express.json());
+
 
 const config = {
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
@@ -16,6 +18,61 @@ const sheetsAuth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth: sheetsAuth });
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME = 'マスターデータ';
+
+const LOG_SHEET_NAME = '出席ログ';
+
+// ✅ POSTBACK受信 → スプレッドシートに記録
+app.post('/webhook', async (req, res) => {
+  const events = req.body.events;
+
+  for (const event of events) {
+    if (event.type === 'postback') {
+      const userId = event.source.userId;
+      const params = new URLSearchParams(event.postback.data);
+      const action = params.get('action');
+      const shiftId = params.get('shiftId');
+
+      if (action === 'attend' && shiftId) {
+        try {
+          // ✅ すでに記録済みかどうかチェック
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${LOG_SHEET_NAME}!A2:C`,
+          });
+          const rows = response.data.values || [];
+          const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
+
+          if (alreadyExists) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: 'すでに参加報告済みです！ありがとう！'
+            });
+            continue;
+          }
+
+          // ✅ スプレッドシートに追加
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${LOG_SHEET_NAME}!A:C`,
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+              values: [[userId, shiftId, new Date().toISOString()]]
+            }
+          });
+
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '参加記録を受け付けました！ありがとう！'
+          });
+        } catch (err) {
+          console.error('記録エラー:', err);
+        }
+      }
+    }
+  }
+  res.sendStatus(200);
+});
+
 
 async function getUserShiftData(userId, sheetName) {
   const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString());
