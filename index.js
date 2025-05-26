@@ -122,7 +122,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
         const templateRes = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: '本文!E3:E563'
+          range: '本文!E3'
         });
         const templateLines = templateRes.data.values?.map(row => row[0]) || [];
 
