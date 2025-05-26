@@ -141,6 +141,9 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 
   res.status(200).send('OK');
+  console.log("🧾 altText:", altText);
+  console.log("🧾 filledJson（送信前）:", filledJson);
+
 });
 
 const PORT = process.env.PORT || 3000;
