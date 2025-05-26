@@ -55,18 +55,25 @@ async function getUserShiftData(userId, sheetName) {
 
 function fillTemplate(templateLines, name, shifts) {
   const joined = templateLines.join('\n');
-  let filled = joined.replace('{name}', name);
-  for (let i = 0; i < 3; i++) {
-    const d = shifts[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
-    filled = filled
-      .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), d['s-time'])
-      .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), d['e-time'])
-      .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), d['club'])
-      .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), d['point']);
+  let filled = joined.replace(/\{name\}/g, name);
+
+  if (shifts.length === 0) {
+    // 空のFlexに置き換えるならここを調整
+    filled = filled.replace(/\{point\d+\}/g, 'これからのシフトはありません');
+    filled = filled.replace(/\{s-time\d+\}/g, '');
+    filled = filled.replace(/\{e-time\d+\}/g, '');
+    filled = filled.replace(/\{club\d+\}/g, '');
+  } else {
+    for (let i = 0; i < 3; i++) {
+      const d = shifts[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
+      filled = filled
+        .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), d['s-time'])
+        .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), d['e-time'])
+        .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), d['club'])
+        .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), d['point']);
+    }
   }
 
-  // 空テキストを全角スペースに置換
-  filled = filled.replace(/"text":\s*""/g, '"text":"　"');
   return filled;
 }
 
@@ -112,9 +119,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       else if (text === '総務部:シフト検索') sheetName = '幹部テスト2025/05/26';
       else continue;
 
-      let altText = '';
-      let filledJson = '';
-
       try {
         const { nameFromSheet, data: shiftData } = await getUserShiftData(userId, sheetName);
 
@@ -131,19 +135,19 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' })
         ]);
 
-        altText = altTextRes.data.values?.[0]?.[0] || `${nameFromSheet}さんのこれからのシフト`;
+        let altTextRaw = altTextRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフト';
         const templateString = flexRes.data.values?.[0]?.[0] || '';
-        filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
+
+        altTextRaw = altTextRaw.replace(/\{name\}/g, nameFromSheet);
+        const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
 
         await client.replyMessage(event.replyToken, {
           type: 'flex',
-          altText: altText,
+          altText: altTextRaw,
           contents: JSON.parse(filledJson)
         });
       } catch (err) {
         console.error('シフト検索中のエラー:', err);
-        console.log("🧾 altText:", altText);
-        console.log("🧾 filledJson（送信前）:", filledJson);
       }
     }
   }
