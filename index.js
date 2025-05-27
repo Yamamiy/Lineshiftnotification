@@ -1,27 +1,29 @@
+// ✅ 必要ライブラリ
 const express = require('express');
 const line = require('@line/bot-sdk');
 const { google } = require('googleapis');
 const app = express();
 app.use(express.json());
 
-
+// ✅ LINE設定
 const config = {
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 const client = new line.Client(config);
 
+// ✅ Google Sheets 認証
 const sheetsAuth = new google.auth.GoogleAuth({
   credentials: JSON.parse(Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString()),
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 const sheets = google.sheets({ version: 'v4', auth: sheetsAuth });
+
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME = 'マスターデータ';
-
 const LOG_SHEET_NAME = '出席ログ';
 
-// ✅ マスターデータから名前を取得
+// ✅ 名前取得（マスターデータ）
 async function getUserNameFromMaster(userId) {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -29,83 +31,19 @@ async function getUserNameFromMaster(userId) {
   });
   const rows = response.data.values || [];
   for (const row of rows) {
-    if (row[1] === userId) {
-      return row[0];
-    }
+    if (row[1] === userId) return row[0];
   }
   return '不明';
 }
 
-// ✅ POSTBACK受信 → スプレッドシートに記録
-app.post('/webhook', async (req, res) => {
-  const events = req.body.events;
-
-  for (const event of events) {
-    if (event.type === 'postback') {
-      const userId = event.source.userId;
-      const params = new URLSearchParams(event.postback.data);
-      const action = params.get('action');
-      const shiftId = params.get('shiftId');
-
-      if (action === 'attend' && shiftId) {
-        try {
-          const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${LOG_SHEET_NAME}!B2:C`,
-          });
-          const rows = response.data.values || [];
-          const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
-
-          if (alreadyExists) {
-            await client.pushMessage(userId, {
-              type: 'text',
-              text: 'すでに参加報告済みです！ありがとう！'
-            });
-            continue;
-          }
-
-          const name = await getUserNameFromMaster(userId);
-
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${LOG_SHEET_NAME}!A:D`,
-            valueInputOption: 'USER_ENTERED',
-            resource: {
-              values: [[name, userId, shiftId, new Date().toISOString()]]
-            }
-          });
-
-          await client.pushMessage(userId, {
-            type: 'text',
-            text: '参加記録を受け付けました！ありがとう！'
-          });
-        } catch (err) {
-          console.error('記録エラー:', err);
-        }
-      }
-    }
-  }
-  res.sendStatus(200);
-});
-
-
-
+// ✅ シフト検索
 async function getUserShiftData(userId, sheetName) {
-  const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_ACCOUNT_BASE64, 'base64').toString());
-  const auth = new google.auth.JWT(
-    credentials.client_email,
-    null,
-    credentials.private_key,
-    ['https://www.googleapis.com/auth/spreadsheets.readonly']
-  );
-  const sheetsReadonly = google.sheets({ version: 'v4', auth });
-
-  const res = await sheetsReadonly.spreadsheets.values.get({
+  const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!B3:G`
   });
 
-  const values = res.data.values || [];
+  const values = response.data.values || [];
   const now = new Date(new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }));
   const nowStr = now.toTimeString().slice(0, 5);
 
@@ -115,7 +53,6 @@ async function getUserShiftData(userId, sheetName) {
     .slice(0, 3);
 
   const nameFromSheet = filtered.length > 0 ? filtered[0][0] : 'UNKNOWN';
-
   const data = filtered.map(row => ({
     's-time': row[2] || '??:??',
     'e-time': row[3] || '??:??',
@@ -145,16 +82,17 @@ function fillTemplate(templateLines, name, shifts) {
         .replace(new RegExp(`\{point${i + 1}\}`, 'g'), d['point']);
     }
   }
-
   return filled;
 }
 
+// ✅ Webhook本体
 app.post('/webhook', line.middleware(config), async (req, res) => {
   const events = req.body.events;
 
   for (const event of events) {
     const userId = event.source.userId;
 
+    // ✅ 友だち追加時にuserIdと名前をマスターデータに記録
     if (event.type === 'follow') {
       try {
         const profile = await client.getProfile(userId);
@@ -183,6 +121,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
     }
 
+    // ✅ シフト検索メッセージ処理
     if (event.type === 'message' && event.message.type === 'text') {
       const text = event.message.text.trim();
       let sheetName = '';
@@ -224,11 +163,56 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         console.error('シフト検索中のエラー:', err);
       }
     }
+
+    // ✅ 出席ボタンによるPostback処理
+    if (event.type === 'postback') {
+      const params = new URLSearchParams(event.postback.data);
+      const action = params.get('action');
+      const shiftId = params.get('shiftId');
+
+      if (action === 'attend' && shiftId) {
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${LOG_SHEET_NAME}!B2:C`,
+          });
+          const rows = response.data.values || [];
+          const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
+
+          if (alreadyExists) {
+            await client.pushMessage(userId, {
+              type: 'text',
+              text: 'すでに参加報告済みです！ありがとう！'
+            });
+            continue;
+          }
+
+          const name = await getUserNameFromMaster(userId);
+
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${LOG_SHEET_NAME}!A:D`,
+            valueInputOption: 'USER_ENTERED',
+            resource: {
+              values: [[name, userId, shiftId, new Date().toISOString()]]
+            }
+          });
+
+          await client.pushMessage(userId, {
+            type: 'text',
+            text: '📝 参加記録を受け付けました！ありがとう！'
+          });
+        } catch (err) {
+          console.error('記録エラー:', err);
+        }
+      }
+    }
   }
 
   res.status(200).send('OK');
 });
 
+// ✅ サーバー起動
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Webhookサーバー起動中！ポート: ${PORT}`);
