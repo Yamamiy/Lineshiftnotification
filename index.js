@@ -3,6 +3,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const { google } = require('googleapis');
 const app = express();
+const crypto = require('crypto');
 app.use(express.json());
 
 // ✅ LINE設定
@@ -85,14 +86,23 @@ function fillTemplate(templateLines, name, shifts) {
   return filled;
 }
 
-// ✅ Webhook本体
-app.post('/webhook', line.middleware(config), async (req, res) => {
+// ✅ Webhook署名手動検証 + 処理本体
+app.post('/webhook', async (req, res) => {
+  const signature = req.headers['x-line-signature'];
+  const body = JSON.stringify(req.body);
+  const hash = crypto.createHmac('SHA256', config.channelSecret).update(body).digest('base64');
+
+  if (hash !== signature) {
+    console.warn('❌ シグネチャ不一致（SignatureValidationFailed）');
+    return res.status(403).send('Invalid signature');
+  }
+
   const events = req.body.events;
 
   for (const event of events) {
     const userId = event.source.userId;
 
-    // ✅ 友だち追加時にuserIdと名前をマスターデータに記録
+    // 友だち登録
     if (event.type === 'follow') {
       try {
         const profile = await client.getProfile(userId);
@@ -121,7 +131,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
     }
 
-    // ✅ シフト検索メッセージ処理
+    // シフト検索
     if (event.type === 'message' && event.message.type === 'text') {
       const text = event.message.text.trim();
       let sheetName = '';
@@ -164,7 +174,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
     }
 
-    // ✅ 出席ボタンによるPostback処理
+    // 出席Postback処理
     if (event.type === 'postback') {
       const params = new URLSearchParams(event.postback.data);
       const action = params.get('action');
