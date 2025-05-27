@@ -21,6 +21,21 @@ const SHEET_NAME = 'マスターデータ';
 
 const LOG_SHEET_NAME = '出席ログ';
 
+// ✅ マスターデータから名前を取得
+async function getUserNameFromMaster(userId) {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'マスターデータ!B2:C',
+  });
+  const rows = response.data.values || [];
+  for (const row of rows) {
+    if (row[1] === userId) {
+      return row[0];
+    }
+  }
+  return '不明';
+}
+
 // ✅ POSTBACK受信 → スプレッドシートに記録
 app.post('/webhook', async (req, res) => {
   const events = req.body.events;
@@ -34,10 +49,9 @@ app.post('/webhook', async (req, res) => {
 
       if (action === 'attend' && shiftId) {
         try {
-          // ✅ すでに記録済みかどうかチェック
           const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${LOG_SHEET_NAME}!A2:C`,
+            range: `${LOG_SHEET_NAME}!B2:C`,
           });
           const rows = response.data.values || [];
           const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
@@ -50,13 +64,14 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          // ✅ スプレッドシートに追加
+          const name = await getUserNameFromMaster(userId);
+
           await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${LOG_SHEET_NAME}!A:C`,
+            range: `${LOG_SHEET_NAME}!A:D`,
             valueInputOption: 'USER_ENTERED',
             resource: {
-              values: [[userId, shiftId, new Date().toISOString()]]
+              values: [[name, userId, shiftId, new Date().toISOString()]]
             }
           });
 
@@ -72,6 +87,7 @@ app.post('/webhook', async (req, res) => {
   }
   res.sendStatus(200);
 });
+
 
 
 async function getUserShiftData(userId, sheetName) {
