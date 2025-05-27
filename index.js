@@ -68,21 +68,28 @@ function fillTemplate(templateLines, name, shifts) {
   const joined = templateLines.join('\n');
   let filled = joined.replace(/\{name\}/g, name);
 
+  // 空値対策の補助関数
+  const safe = (value, fallback = '-') => {
+    return (value && value.trim() !== '') ? value : fallback;
+  };
+
   if (shifts.length === 0) {
+    // シフトが無い場合：1件目にメッセージ、他は空白または記号
     filled = filled.replace(/\{point\d+\}/g, 'これからのシフトはありません');
-    filled = filled.replace(/\{s-time\d+\}/g, '');
-    filled = filled.replace(/\{e-time\d+\}/g, '');
-    filled = filled.replace(/\{club\d+\}/g, '');
+    filled = filled.replace(/\{s-time\d+\}/g, '-');
+    filled = filled.replace(/\{e-time\d+\}/g, '-');
+    filled = filled.replace(/\{club\d+\}/g, '-');
   } else {
     for (let i = 0; i < 3; i++) {
       const d = shifts[i] || { 's-time': '', 'e-time': '', 'club': '', 'point': '' };
       filled = filled
-        .replace(new RegExp(`\{s-time${i + 1}\}`, 'g'), d['s-time'])
-        .replace(new RegExp(`\{e-time${i + 1}\}`, 'g'), d['e-time'])
-        .replace(new RegExp(`\{club${i + 1}\}`, 'g'), d['club'])
-        .replace(new RegExp(`\{point${i + 1}\}`, 'g'), d['point']);
+        .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), safe(d['s-time']))
+        .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), safe(d['e-time']))
+        .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), safe(d['club'], '未設定'))
+        .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), safe(d['point'], '未設定'));
     }
   }
+
   return filled;
 }
 
