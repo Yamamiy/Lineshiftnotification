@@ -85,8 +85,8 @@ function fillTemplate(templateLines, name, shifts) {
       filled = filled
         .replace(new RegExp(`\\{s-time${i + 1}\\}`, 'g'), safe(d['s-time']))
         .replace(new RegExp(`\\{e-time${i + 1}\\}`, 'g'), safe(d['e-time']))
-        .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), safe(d['club'], '未設定'))
-        .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), safe(d['point'], '未設定'));
+        .replace(new RegExp(`\\{club${i + 1}\\}`, 'g'), safe(d['club'], ''))
+        .replace(new RegExp(`\\{point${i + 1}\\}`, 'g'), safe(d['point'], '以降のシフトはありません'));
     }
   }
 
