@@ -1,5 +1,6 @@
 const line = require('@line/bot-sdk');
-const { sheets, SPREADSHEET_ID, LOG_SHEET_NAME } = require('../services/sheetService');
+const querystring = require('querystring');
+const { sheets, SPREADSHEET_ID, SHEET_NAME, LOG_SHEET_NAME } = require('../services/sheetService');
 const { getUserNameFromMaster } = require('../services/templateService');
 
 const client = new line.Client({
@@ -8,10 +9,56 @@ const client = new line.Client({
 
 module.exports = async function onPostback(event) {
   const userId = event.source.userId;
+  const replyToken = event.replyToken;
+
   const params = new URLSearchParams(event.postback.data);
   const action = params.get('action');
   const shiftId = params.get('shiftId');
 
+  // ✅ 部署選択処理
+  const queryData = querystring.parse(event.postback.data);
+  if (queryData.form_step === 'select_department') {
+    const selectedDept = queryData.value;
+    console.log(`✅ 部署選択：${selectedDept}`);
+
+    try {
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:C`,
+      });
+
+      const rows = sheetData.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === userId);
+      if (rowIndex === -1) {
+        console.error('❌ userIdがC列に見つからない');
+        return;
+      }
+
+      const targetRow = rowIndex + 2;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!E${targetRow}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[selectedDept]]
+        }
+      });
+
+      console.log(`📝 E${targetRow} に部署記録`);
+
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '次にあなたのフルネーム（漢字フルネーム）を送信してください。'
+      });
+    } catch (err) {
+      console.error('onPostback 部署選択エラー:', err.message || err);
+    }
+
+    return;
+  }
+
+  // ✅ 参加ボタン処理（従来の処理）
   if (action === 'attend' && shiftId) {
     try {
       const response = await sheets.spreadsheets.values.get({
@@ -47,7 +94,7 @@ module.exports = async function onPostback(event) {
       });
 
     } catch (err) {
-      console.error('onPostbackエラー:', err);
+      console.error('onPostback 参加処理エラー:', err);
     }
   }
 };
