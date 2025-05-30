@@ -1,78 +1,137 @@
 const line = require('@line/bot-sdk');
+const querystring = require('querystring');
 const { sheets, SPREADSHEET_ID, SHEET_NAME } = require('../services/sheetService');
 
 const client = new line.Client({
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
 });
 
-module.exports = async function onFollow(event) {
+module.exports = async function followHandler(event) {
   const userId = event.source.userId;
-  console.log(`🔔 followイベント検出：userId=${userId}`);
+  const replyToken = event.replyToken;
+  const eventType = event.type;
 
   try {
-    // プロフィール取得
-    const profile = await client.getProfile(userId);
-    const name = profile.displayName;
-    console.log(`✅ プロフィール取得成功：${name}`);
+    // ① follow（登録＋Flex送信）
+    if (eventType === 'follow') {
+      console.log(`🔔 follow検出：userId=${userId}`);
 
-    // すでに登録されているか確認（C列 = userId列）
-    const sheetData = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!C2:C`,
-    });
+      const profile = await client.getProfile(userId);
+      const displayName = profile.displayName;
+      const datetime = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 
-    const existingIds = (sheetData.data.values || []).flat();
-    if (existingIds.includes(userId)) {
-      console.log('⚠️ すでに登録済みのユーザーです。処理スキップ');
-      return;
-    }
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:C`,
+      });
 
-    // 時刻を日本時間で取得
-    const datetime = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    console.log(`🕒 登録時刻：${datetime}`);
-
-    // A: 登録日時, B: 部署（空欄）, C: userId, D: LINE表示名
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A2`,
-      valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [[datetime, '', userId, name]]
+      const existingIds = (sheetData.data.values || []).flat();
+      if (existingIds.includes(userId)) {
+        console.log('⚠️ 既に登録済みのuserId：スキップ');
+        return;
       }
-    });
-    console.log('📝 スプレッドシートに登録完了');
 
-    // 本文シートのG3セルからFlexテンプレ文字列を取得
-    const flexResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `本文!G3`,
-    });
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A2`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: [[datetime, '', userId, displayName, '']]
+        }
+      });
+      console.log('📝 新規登録完了');
 
-    const flexString = (flexResponse.data.values || [])[0]?.[0];
-    if (!flexString) throw new Error('❌ G3セルが空です。Flexテンプレが読み込めません');
+      const flexResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `本文!G3`,
+      });
 
-    console.log('📦 Flexテンプレ文字列取得成功');
+      const flexString = (flexResponse.data.values || [])[0]?.[0];
+      if (!flexString) throw new Error('G3セルが空');
 
-    // JSONとしてパース
-    let flexJson;
-    try {
-      flexJson = JSON.parse(flexString);
-      console.log('✅ JSONパース成功');
-    } catch (parseErr) {
-      throw new Error('❌ JSONパースエラー：G3セルのフォーマットを確認してください');
+      const flexJson = JSON.parse(flexString);
+      await client.pushMessage(userId, {
+        type: 'flex',
+        altText: '所属部署を選択してください',
+        contents: flexJson
+      });
+
+      console.log('📤 Flexメッセージ送信完了');
     }
 
-    // Flex Message送信
-    await client.pushMessage(userId, {
-      type: 'flex',
-      altText: '所属部署を選択してください',
-      contents: flexJson
-    });
-    console.log('📤 Flexメッセージ送信完了');
+    // ② postback（部署記録）
+    else if (eventType === 'postback') {
+      const data = querystring.parse(event.postback.data);
+      if (data.form_step !== 'select_department') return;
+
+      const selectedDept = data.value;
+      console.log(`✅ 部署選択：${selectedDept}`);
+
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:C`,
+      });
+
+      const rows = sheetData.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === userId);
+      if (rowIndex === -1) {
+        console.error('❌ userIdがC列に見つからない');
+        return;
+      }
+
+      const targetRow = rowIndex + 2;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!E${targetRow}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[selectedDept]]
+        }
+      });
+      console.log(`📝 E${targetRow} に部署記録`);
+
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '次にあなたのフルネーム（漢字フルネーム）を送信してください。'
+      });
+    }
+
+    // ③ message（名前記録）
+    else if (eventType === 'message' && event.message.type === 'text') {
+      const fullName = event.message.text;
+      console.log(`✉️ 名前入力検出：「${fullName}」 from ${userId}`);
+
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:C`,
+      });
+
+      const rows = sheetData.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === userId);
+      if (rowIndex === -1) {
+        console.error('❌ userIdが見つからず、名前登録スキップ');
+        return;
+      }
+
+      const targetRow = rowIndex + 2;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!B${targetRow}`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[fullName]]
+        }
+      });
+      console.log(`📝 B${targetRow} に名前記録`);
+
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '登録完了です！ありがとうございます。当日の運営よろしくお願いします！'
+      });
+    }
 
   } catch (err) {
-    console.error('🔥 onFollowエラー:', err.message || err);
+    console.error('🔥 followHandlerエラー:', err.message || err);
   }
 };
-
