@@ -84,7 +84,7 @@ module.exports = async function onMessage(event) {
 
     await client.replyMessage(event.replyToken, {
       type: 'text',
-      text: '登録完了です！ありがとうございます。当日の運営よろしくお願いします！'
+      text: '登録完了です！ありがとうございます\n当日の運営よろしくお願いします！'
     });
 
   } catch (err) {
