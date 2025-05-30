@@ -29,27 +29,24 @@ module.exports = async function onPostback(event) {
         return;
       }
 
-      const targetRow = rowIndex + 2;
+      const targetRow = rowIndex + 2; // A2が1行目だから +2
 
-      // B列（部署）に書き込み
+      // E列（部署）に書き込み
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!B${targetRow}`,
+        range: `${SHEET_NAME}!E${targetRow}`,
         valueInputOption: 'RAW',
         requestBody: {
           values: [[selectedDept]]
         }
       });
 
-      console.log(`📝 部署「${selectedDept}」をB${targetRow}に登録`);
+      console.log(`📝 部署「${selectedDept}」をE${targetRow}に登録`);
 
-      // フルネーム入力依頼メッセージ（replyで返す）
       await client.replyMessage(replyToken, {
         type: 'text',
         text: '次にあなたのフルネーム（漢字フルネーム）を送信してください。'
       });
-
-      console.log('📨 フルネーム入力依頼をreplyで送信');
 
     } else {
       console.log('⚠️ 想定外のform_step');
