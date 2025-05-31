@@ -1,93 +1,102 @@
 const line = require('@line/bot-sdk');
-const { sheets, SPREADSHEET_ID, SHEET_NAME } = require('../services/sheetService');
-const { getUserShiftData, fillTemplate } = require('../services/templateService');
+const querystring = require('querystring');
+const { sheets, SPREADSHEET_ID, SHEET_NAME, LOG_SHEET_NAME } = require('../services/sheetService');
+const { getUserNameFromMaster } = require('../services/templateService');
 
 const client = new line.Client({
   channelAccessToken: process.env.LINE_ACCESS_TOKEN,
 });
 
-module.exports = async function onMessage(event) {
+module.exports = async function onPostback(event) {
   const userId = event.source.userId;
-  const text = event.message.text.trim();
+  const replyToken = event.replyToken;
 
-  let sheetName = '';
-  if (text === '企画部:シフト検索') sheetName = '幹部テスト2025/05/27';
-  else if (text === '総務部:シフト検索') sheetName = '幹部テスト2025/05/26';
+  const params = new URLSearchParams(event.postback.data);
+  const action = params.get('action');
+  const shiftId = params.get('shiftId');
 
-  // ✅ ① シフト検索処理（キーワードマッチ時）
-  if (sheetName !== '') {
+  // ✅ 部署選択処理
+  const queryData = querystring.parse(event.postback.data);
+  if (queryData.form_step === 'select_department') {
+    const selectedDept = queryData.value;
+    console.log(`✅ 部署選択：${selectedDept}`);
+
     try {
-      const { nameFromSheet, data: shiftData } = await getUserShiftData(userId, sheetName);
+      const sheetData = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!C2:C`,
+      });
 
-      const [altTextRes, flexRes, noShiftRes] = await Promise.all([
-        sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E2' }),
-        sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E3' }),
-        sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: '本文!E4' })
-      ]);
-
-      let altTextRaw = altTextRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフト';
-      altTextRaw = altTextRaw.replace(/\{name\}/g, nameFromSheet);
-
-      if (shiftData.length === 0) {
-        const noShiftMsg = (noShiftRes.data.values?.[0]?.[0] || '{name}さんのこれからのシフトは登録されていません。').replace(/\{name\}/g, nameFromSheet);
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: noShiftMsg
-        });
+      const rows = sheetData.data.values || [];
+      const rowIndex = rows.findIndex(row => row[0] === userId);
+      if (rowIndex === -1) {
+        console.error('❌ userIdがC列に見つからない');
         return;
       }
 
-      const templateString = flexRes.data.values?.[0]?.[0] || '';
-      const filledJson = fillTemplate([templateString], nameFromSheet, shiftData);
+      const targetRow = rowIndex + 2;
 
-      await client.replyMessage(event.replyToken, {
-        type: 'flex',
-        altText: altTextRaw,
-        contents: JSON.parse(filledJson)
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: [
+            { range: `${SHEET_NAME}!E${targetRow}`, values: [[selectedDept]] },
+            { range: `${SHEET_NAME}!F${targetRow}`, values: [['pending']] }
+          ]
+        }
       });
 
+      console.log(`📝 E${targetRow} に部署記録 & F列ステータス設定`);
+
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '次にあなたのフルネーム（漢字フルネーム）を送信してください。'
+      });
     } catch (err) {
-      console.error('onMessage シフト検索エラー:', err.message || err);
+      console.error('onPostback 部署選択エラー:', err.message || err);
     }
 
     return;
   }
 
-  // ✅ ② 名前入力処理（それ以外のテキスト）
-  try {
-    const fullName = text;
-    console.log(`✉️ 名前入力検出：「${fullName}」 from ${userId}`);
+  // ✅ 参加ボタン処理（従来の処理）
+  if (action === 'attend' && shiftId) {
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${LOG_SHEET_NAME}!B2:C`,
+      });
 
-    const sheetData = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!C2:C`,
-    });
+      const rows = response.data.values || [];
+      const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
 
-    const rows = sheetData.data.values || [];
-    const rowIndex = rows.findIndex(row => row[0] === userId);
-    if (rowIndex === -1) {
-      console.error('❌ userIdが見つからず、名前登録スキップ');
-      return;
-    }
-
-    const targetRow = rowIndex + 2;
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!B${targetRow}`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [[fullName]]
+      if (alreadyExists) {
+        await client.replyMessage(replyToken, {
+          type: 'text',
+          text: 'すでに参加報告済みです！ありがとう！'
+        });
+        return;
       }
-    });
 
-    console.log(`📝 B${targetRow} に名前「${fullName}」を記録`);
+      const name = await getUserNameFromMaster(userId);
 
-    await client.replyMessage(event.replyToken, {
-      type: 'text',
-      text: '登録完了です！ありがとうございます\n当日の運営よろしくお願いします！'
-    });
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${LOG_SHEET_NAME}!A:D`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [[name, userId, shiftId, new Date().toISOString()]]
+        }
+      });
 
-  } catch (err) {
-    console.error('onMessage 名前登録エラー:', err.message || err);
+      await client.replyMessage(replyToken, {
+        type: 'text',
+        text: '📝 参加記録を受け付けました！ありがとう！'
+      });
+
+    } catch (err) {
+      console.error('onPostback 参加処理エラー:', err);
+    }
   }
 };
