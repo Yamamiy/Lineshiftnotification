@@ -43,7 +43,7 @@ module.exports = async function onFollow(event) {
     // Flexテンプレ読み込み（本文!G3）
     const flexResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `本文!G3`,
+      range: `本文!H3`,
     });
 
     const flexString = (flexResponse.data.values || [])[0]?.[0];
