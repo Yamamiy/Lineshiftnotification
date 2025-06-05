@@ -62,41 +62,50 @@ module.exports = async function onPostback(event) {
 
   // ✅ 参加ボタン処理（従来の処理）
   if (action === 'attend' && shiftId) {
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${LOG_SHEET_NAME}!B2:C`,
-      });
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${LOG_SHEET_NAME}!B2:C`,
+    });
 
-      const rows = response.data.values || [];
-      const alreadyExists = rows.some(row => row[0] === userId && row[1] === shiftId);
+    const rows = response.data.values || [];
 
-      if (alreadyExists) {
-        await client.replyMessage(replyToken, {
-          type: 'text',
-          text: 'すでに参加報告済みです！ありがとう！'
-        });
-        return;
-      }
+    // 同じ userId & shiftId の記録回数をカウント
+    const count = rows.filter(row => row[0] === userId && row[1] === shiftId).length;
 
-      const name = await getUserNameFromMaster(userId);
-
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${LOG_SHEET_NAME}!A:D`,
-        valueInputOption: 'USER_ENTERED',
-        resource: {
-          values: [[name, userId, shiftId, new Date().toISOString()]]
-        }
-      });
-
-      await client.replyMessage(replyToken, {
+    if (count === 1) {
+      // 2回目の反応：注意メッセージを送る
+      await client.replyMessage(event.replyToken, {
         type: 'text',
-        text: '📝 参加記録を受け付けました！ありがとう！'
+        text: 'すでに参加報告済みです！ありがとう！'
       });
-
-    } catch (err) {
-      console.error('onPostback 参加処理エラー:', err);
+      return;
     }
+
+    if (count >= 2) {
+      // 3回目以降は無視（無反応）
+      return;
+    }
+
+    // 初回：出席記録を追加
+    const name = await getUserNameFromMaster(userId);
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${LOG_SHEET_NAME}!A:D`,
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[name, userId, shiftId, new Date().toISOString()]]
+      }
+    });
+
+    await client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '📝 参加記録を受け付けました！ありがとう！'
+    });
+
+  } catch (err) {
+    console.error('onPostback 参加処理エラー:', err);
   }
+}
 };
