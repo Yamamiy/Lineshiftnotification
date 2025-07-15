@@ -1,0 +1,94 @@
+function onFormSubmit(e) {
+  const sheetValues = e.values;
+
+  // ✅ Googleフォームの回答の列順に応じてインデックスを調整！
+  const department = sheetValues[2]; // 例：C列 = "部署"
+  const content = sheetValues[3];    // 例：D列 = "送信内容"
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = ss.getSheetByName("マスターデータ");
+  const data = masterSheet.getDataRange().getValues();
+
+  let messageDepartment = department;
+  let targetUserIds = [];
+
+  Logger.log(`📥 フォーム入力 - 部署: ${department}, 内容: ${content}`);
+  Logger.log(`📄 マスターデータ件数（ヘッダー除く）: ${data.length - 1}`);
+
+  if (department === "全体") {
+    // 全員（ヘッダー除く2列目以降）のユーザーID（C列: index 2）
+    targetUserIds = data.slice(1).map(row => row[2]);
+    Logger.log(`🌐 全体送信: ${targetUserIds.length}人`);
+  } else if (department === "幹部") {
+    // H列（index 7）が TRUE の行のみ
+    const filtered = data.slice(1).filter(row => {
+      const isExec = row[7] === true || row[7] === "TRUE";
+      const userId = row[2];
+      Logger.log(`🔍 幹部チェック: userId=${userId}, 幹部=${row[7]}`);
+      return isExec;
+    });
+
+    targetUserIds = filtered.map(row => row[2]);
+    messageDepartment = "文実幹部";
+    Logger.log(`🎯 幹部送信対象: ${targetUserIds.length}人`);
+  } else {
+    // E列（部署, index 4）と一致する人を対象
+    const filtered = data.slice(1).filter(row => {
+      const dept = row[4];
+      const userId = row[2];
+      Logger.log(`🔍 部署チェック: userId=${userId}, 部署=${dept}`);
+      return dept === department;
+    });
+
+    targetUserIds = filtered.map(row => row[2]);
+    Logger.log(`📌 部署「${department}」送信対象: ${targetUserIds.length}人`);
+  }
+
+  const message = `【${messageDepartment}向けのお知らせです】\n${content}`;
+
+  if (targetUserIds.length === 0) {
+    Logger.log("⚠️ 該当ユーザーが見つかりませんでした。送信中止。");
+    return;
+  }
+
+  Logger.log("📤 送信先:");
+  targetUserIds.forEach(userId => Logger.log(` - ${userId}`));
+
+  // LINE送信
+  targetUserIds.forEach(userId => {
+    sendLineMessage(userId, message);
+  });
+}
+
+
+function sendLineMessage(userId, message) {
+  const token = PropertiesService.getScriptProperties().getProperty("LINE_ACCESS_TOKEN");
+
+  if (!token) {
+    Logger.log("❌ アクセストークンが未設定です");
+    return;
+  }
+
+  const url = "https://api.line.me/v2/bot/message/push";
+  const payload = {
+    to: userId,
+    messages: [{
+      type: "text",
+      text: message
+    }]
+  };
+
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      Authorization: "Bearer " + token
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  Logger.log(`📨 [${userId}] ステータス: ${response.getResponseCode()}`);
+  Logger.log(response.getContentText());
+}
