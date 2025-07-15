@@ -1,0 +1,226 @@
+function getSheetName_typeS() {
+  const dashSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DASHBOARD_SHEET_NAME);
+  const day = dashSheet.getRange('E4').getValue().toString().trim();
+  
+  if (day === '一日目') {
+    return '総務部シフト_一日目';
+  } else if (day === '二日目') {
+    return '総務部シフト_二日目';
+  } else {
+    appendLogToSheet(`⚠️ E4の値が不正です（${day}）。一日目を使用します`, 'D');
+    return '総務部シフト_一日目';
+  }
+}
+
+
+function createTimeTriggersFromSheet_typeS() {
+  const sheetName = getSheetName_typeS();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const dashSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DASHBOARD_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+
+  // トリガー削除
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'sendGroupedReminder_typeS') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  appendLogToSheet('既存トリガー削除完了', 'D');
+
+  const shiftDate = new Date();
+  shiftDate.setHours(0, 0, 0, 0);
+
+  let notifyMinutesBefore = 10;
+  const dashValue = dashSheet.getRange("D4").getValue();
+  if (!isNaN(dashValue) && Number(dashValue) > 0) {
+    notifyMinutesBefore = Number(dashValue);
+  } else {
+    appendLogToSheet("⚠️ D4の値が無効です。10分前にフォールバックします", 'D');
+  }
+
+  const timeSet = new Set();
+  const timeToRows = {};
+
+  for (let i = 2; i < data.length; i++) {
+    const rawTime = data[i][COL_START - 1];
+    const timeStr = (rawTime instanceof Date)
+      ? Utilities.formatDate(rawTime, TIMEZONE, 'HH:mm')
+      : String(rawTime).trim();
+
+    if (/^\d{2}:\d{2}$/.test(timeStr)) {
+      timeSet.add(timeStr);
+      if (!timeToRows[timeStr]) timeToRows[timeStr] = [];
+      timeToRows[timeStr].push(i + 1);
+    }
+  }
+
+  const triggerLog = [];
+  const uniqueTimes = [...timeSet].sort();
+  let createdCount = 0;
+
+  for (const time of uniqueTimes) {
+    const [h, m] = time.split(':').map(Number);
+    const shiftTime = new Date(shiftDate.getFullYear(), shiftDate.getMonth(), shiftDate.getDate(), h, m);
+    const triggerTime = new Date(shiftTime.getTime() - notifyMinutesBefore * 60 * 1000);
+
+    try {
+      ScriptApp.newTrigger('sendGroupedReminder_typeS')
+        .timeBased()
+        .at(triggerTime)
+        .create();
+
+      timeToRows[time].forEach(rowIndex => {
+        sheet.getRange(rowIndex, COL_STATUS).setValue('作成済');
+      });
+
+      const now = Utilities.formatDate(new Date(), TIMEZONE, "HH:mm:ss");
+      const triggerStr = Utilities.formatDate(triggerTime, TIMEZONE, "HH:mm");
+      appendLogToSheet(`${now} トリガー作成: ${triggerStr}`, 'F');
+
+      triggerLog.push({ time: triggerTime, label: 'sendGroupedReminder_typeS' });
+      createdCount++;
+    } catch (e) {
+      appendLogToSheet(`❌ トリガー作成失敗 (${time}): ${e.message}`, 'D');
+    }
+  }
+
+  appendLogToSheet(`合計 ${createdCount} 件のトリガーを登録`, 'D');
+
+  // ダッシュボード表示
+  triggerLog.sort((a, b) => a.time - b.time);
+  const output = triggerLog.map(log => [
+    Utilities.formatDate(log.time, TIMEZONE, "HH:mm"),
+    log.label
+  ]);
+
+  dashSheet.getRange(6, 8, dashSheet.getMaxRows() - 5, 2).clearContent();
+  dashSheet.getRange(6, 8, output.length, 2).setValues(output);
+}
+
+
+function sendGroupedReminder_typeS() {
+  const sheetName = getSheetName_typeS();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const templateSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TEMPLATE_SHEET_NAME);
+  const dashSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DASHBOARD_SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+
+  const altTextTemplate = templateSheet.getRange('B2').getValue();
+  const flexTemplateRaw = templateSheet.getRange('B3').getValue();
+
+  let minutesBefore = parseInt(dashSheet.getRange('D4').getValue(), 10);
+  if (isNaN(minutesBefore) || minutesBefore < 0) minutesBefore = 10;
+
+  const now = new Date();
+  const target = new Date(now.getTime() + minutesBefore * 60 * 1000);
+  target.setSeconds(0);
+  target.setMilliseconds(0);
+
+  for (let i = 2; i < data.length; i++) {
+    const row = data[i];
+    const name = row[COL_NAME - 1];
+    const userId = row[COL_USERID - 1];
+    const startTime = row[COL_START - 1];
+    const endTime = row[COL_END - 1];
+    const club = row[COL_CLUB - 1];
+    const point = row[COL_POINT - 1];
+    const notified = row[COL_STATUS - 1];
+
+    if (!(startTime instanceof Date)) continue;
+
+    const start = new Date(now);
+    start.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+
+    const end = new Date(now);
+    end.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+
+    const diff = Math.floor((start.getTime() - target.getTime()) / 60000);
+
+    if (Math.abs(diff) <= 2 && notified !== '送信済') {
+      const sTimeStr = Utilities.formatDate(start, TIMEZONE, 'HH:mm');
+      const eTimeStr = Utilities.formatDate(end, TIMEZONE, 'HH:mm');
+      const shiftId = `${userId}_${Utilities.formatDate(start, TIMEZONE, 'MMdd_HHmm')}`;
+
+      const flexJson = flexTemplateRaw
+        .replace(/{name}/g, name)
+        .replace(/{point}/g, point)
+        .replace(/{club}/g, club)
+        .replace(/{s-time}/g, sTimeStr)
+        .replace(/{e-time}/g, eTimeStr)
+        .replace(/{shiftId}/g, shiftId);
+
+      const altText = altTextTemplate
+        .replace(/{point}/g, point)
+        .replace(/{club}/g, club)
+        .replace(/{s-time}/g, sTimeStr)
+        .replace(/{e-time}/g, eTimeStr);
+
+      try {
+        sendFlexMessage(userId, flexJson, altText);
+        sheet.getRange(i + 1, COL_STATUS).setValue('送信済');
+        sheet.getRange(i + 1, COL_TIMESTAMP).setValue(new Date());
+        appendLogToSheet(`${name} さんにFlex通知成功（${sTimeStr}）`, 'D');
+      } catch (e) {
+        sheet.getRange(i + 1, COL_STATUS).setValue('送信失敗');
+        sheet.getRange(i + 1, COL_TIMESTAMP).setValue(new Date());
+
+        const alert = `【通知エラー】
+        ${name} さんへのFlex通知に失敗しました。
+        時間: ${sTimeStr}
+        場所: ${point}`;
+
+        const adminUserId = PropertiesService.getScriptProperties().getProperty('ADMIN_USER_ID');
+        sendFlexMessage(adminUserId, JSON.stringify({
+          type: "text",
+          text: alert
+        }), alert);
+
+        appendLogToSheet(` ${name} さんにFlex通知失敗（${sTimeStr}）`, 'D');
+      }
+    }
+  }
+}
+
+
+function sendFlexMessage(userId, flexJson, altText) {
+  const token = PropertiesService.getScriptProperties().getProperty('LINE_ACCESS_TOKEN');
+  const url = PropertiesService.getScriptProperties().getProperty('LINE_API_PUSH');
+
+  const payload = {
+    to: userId,
+    messages: [{
+      type: "flex",
+      altText: altText,
+      contents: JSON.parse(flexJson)
+    }]
+  };
+
+  const options = {
+    method: 'post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    payload: JSON.stringify(payload)
+  };
+
+  UrlFetchApp.fetch(url, options);
+}
+
+
+// ✅ 確認用
+function getdata_typeS() {
+  const sheetName = getSheetName_typeS();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const headers = sheet.getRange(2, 2, 1, 5).getValues()[0];
+  const data = sheet.getRange(3, 2, sheet.getLastRow() - 2, 5).getDisplayValues();
+
+  return data.map(row => {
+    const person = {};
+    row.forEach((v, i) => person[headers[i]] = v);
+    return person;
+  });
+}
+
+
+
